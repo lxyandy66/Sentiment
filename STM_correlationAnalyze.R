@@ -15,7 +15,7 @@ cor(data.stm.raw[,c("SNR","meanDelay", "sdDelay","continousLossRate","lossHappen
 
 
 # 根据导入网络参数 生成network schedule
-data.stm.network.para<-read.xlsx("STM_NetworkParameter.xlsx",sheetIndex = 1)%>%
+data.stm.network.para<-read.xlsx("STM_NetworkParameter.xlsx",sheetName = "network")%>%
   as.data.table()%>%cbind(.,id=c(1:nrow(.)))
 
 
@@ -29,14 +29,19 @@ apply(data.stm.network.para[,c("continousPacketLoss","lossHappenedRate","meanDel
   info.prob.packetLoss<-data.table(next0=c(x[1],x[2]),
                                    next1=c(1-x[1],1-x[2])) #每行行号为当前的状态
   s<-1 #第一个包认为是成功发送
+  cat("to chain generator \n")
   for(t in 2:TimeCount){
     s<-c(s,generatorFunction(s[t-1]))
   }
+  cat("to schedule\n")
   data.network.schedule<-data.table(time=c(1:TimeCount),
                                     isRcv=s,
                                     delay=abs(rnorm(TimeCount,mean = x[3],sd = x[4])))
-  write.xlsx(data.network.schedule,file = paste("networkSchedule_case_",x[5],".xlsx",sep = ""))
+  cat("to output\n")
+  write.xlsx(data.network.schedule,file = paste("networkSchedule_case5_id_",x[5],".xlsx",sep = ""),row.names = FALSE)
+  cat("output complete\n")
 })
+#会有一个NULL的输出，目前未发现是什么问题，需注意
 
 
 ####随机抽样函数####
