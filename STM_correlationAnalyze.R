@@ -22,24 +22,24 @@ data.stm.network.para<-read.xlsx("STM_NetworkParameter.xlsx",sheetName = "networ
 # 生成马尔可夫链的长度
 TimeCount=7200
 
-data.stm.network.para<-data.stm.network.para[1:2]#测试用
+#data.stm.network.para<-data.stm.network.para[1:2]#测试用
 
 apply(data.stm.network.para[,c("continousPacketLoss","lossHappenedRate","meanDelay","stdDelay","id")],MARGIN = 1,FUN = function(x){
   #当前0; 当前1
   info.prob.packetLoss<-data.table(next0=c(x[1],x[2]),
                                    next1=c(1-x[1],1-x[2])) #每行行号为当前的状态
   s<-1 #第一个包认为是成功发送
-  cat("to chain generator \n")
+  cat(x[5]," to chain generator \n")
   for(t in 2:TimeCount){
     s<-c(s,generatorFunction(s[t-1]))
   }
-  cat("to schedule\n")
+  cat(x[5]," to schedule\n")
   data.network.schedule<-data.table(time=c(1:TimeCount),
                                     isRcv=s,
                                     delay=abs(rnorm(TimeCount,mean = x[3],sd = x[4])))
-  cat("to output\n")
+  cat(x[5]," to output\n")
   write.xlsx(data.network.schedule,file = paste("networkSchedule_case5_id_",x[5],".xlsx",sep = ""),row.names = FALSE)
-  cat("output complete\n")
+  cat(x[5]," output complete\n")
 })
 #会有一个NULL的输出，目前未发现是什么问题，需注意
 
