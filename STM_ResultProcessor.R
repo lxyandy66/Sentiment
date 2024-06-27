@@ -81,8 +81,7 @@ for(i in 1:3){
                             meanFinal=mean(Tsup[c((length(Tsup)-60):length(Tsup))],na.rm=TRUE),#最终60s的平均值 
                             stdFinal=sd(Tsup[c((length(Tsup)-60):length(Tsup))],na.rm=TRUE),#最终60s的标准差
                             #判断是否有超出稳定范围的，思路：最后60s的Tsup是否在stableRange范围内，若有FALSE（即不在），则不稳定
-                            isStable=all(Tsup[c((length(Tsup)-60):length(Tsup))]>=getStableRange(Tsup.set[1])[1])&&
-                                     all(Tsup[c((length(Tsup)-60):length(Tsup))]<=getStableRange(Tsup.set[1])[2]),
+                            isStable=all(Tsup[c((length(Tsup)-60):length(Tsup))] %between% getStableRange(Tsup.set[1])),
                             #注意这里逻辑判断的向量形式，例如c(2,3)>=2&&c(2,5)<=4 会返回TRUE
                             sumDeltaTsup=sum(abs(Tsup-Tsup.set),na.rm = TRUE)#温度总偏移量
                             ),by=Tsup.set]
