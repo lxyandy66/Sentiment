@@ -35,8 +35,9 @@ stat.stm.simResult.simLab<-data.table(testId=numeric(0),
 
 
 
-for(i in 1:3){
+for(i in 1:100){
   # 包括 震荡幅度
+  cat("Processing test id ",i," ...\n")
   TestId<-i
   data.stm.simResult.raw<-read.xlsx(paste("AutoEvaluation_Test/Result_id_",i,".xlsx",sep = ""),sheetIndex = 1)%>%as.data.table()
   # data.stm.simResult.raw<-data.stm.simResult.raw[1:250]
@@ -67,10 +68,10 @@ for(i in 1:3){
   #### 阀门行为计算 ####
   #阀门行为统计
   stat.stm.simResult.valve<-data.stm.simResult.raw[,.(valveMove=sum(abs(deltaValve),na.rm = TRUE),# 阀门总行程
-                                                      changeDirCount=length(directionCount(deltaValve)$state)# 阀门换向次数
+                                                      changeDirCount=length(directionCount(deltaValve,threshold=0.2)$state)# 阀门换向次数
                                                       ),by=Tsup.set]
   stat.stm.simResult.simLab.append<-data.table(testId=TestId,data.stm.simResult.raw[,.(valveMove=sum(abs(deltaValve),na.rm = TRUE),# 阀门总行程
-                                                             changeDirCount=length(directionCount(deltaValve)$state)# 阀门换向次数
+                                                             changeDirCount=length(directionCount(deltaValve,threshold=0.2)$state)# 阀门换向次数
                                                              )])#对于simlab，记录总的阀门移动和换向次数
   
   
@@ -91,9 +92,9 @@ for(i in 1:3){
   stat.stm.simResult.simLab.ctrlPerf<-data.stm.simResult.raw[,.(sumDeltaTsup=sum(abs(Tsup-Tsup.set),na.rm = TRUE))]
   stat.stm.simResult.simLab.ctrlPerf[,":="(testId=TestId,
                                   overshoot=stat.stm.simResult.ctrlPerf[Tsup.set==50]$peakValue-50,
-                                  sseFinal50=stat.stm.simResult.ctrlPerf[Tsup.set==50]$meanFinal-50,
-                                  sseFinal45=stat.stm.simResult.ctrlPerf[Tsup.set==45]$meanFinal-45,
-                                  sseFinal43=stat.stm.simResult.ctrlPerf[Tsup.set==43]$meanFinal-43,
+                                  sseFinal50=abs(stat.stm.simResult.ctrlPerf[Tsup.set==50]$meanFinal-50),
+                                  sseFinal45=abs(stat.stm.simResult.ctrlPerf[Tsup.set==45]$meanFinal-45),
+                                  sseFinal43=abs(stat.stm.simResult.ctrlPerf[Tsup.set==43]$meanFinal-43),
                                   std50=stat.stm.simResult.ctrlPerf[Tsup.set==50]$stdFinal,
                                   std45=stat.stm.simResult.ctrlPerf[Tsup.set==45]$stdFinal,
                                   std43=stat.stm.simResult.ctrlPerf[Tsup.set==43]$stdFinal)]
@@ -104,26 +105,43 @@ for(i in 1:3){
   
   ####震荡幅度相关计算####
   data.stm.simResult.oscillation<-data.stm.simResult.raw[isTsupCritical==TRUE & time %in% c(250:500,750:1000,1250:1500)]
-  setorderv(data.stm.simResult.oscillation,"time",-1)
-  #选出单侧计算振幅的点数
-  data.stm.simResult.oscillation<-data.stm.simResult.oscillation[,.(time=time,
-                                                                    Tsup=Tsup,
-                                                                    Tsup_preOsc=c(NA,Tsup[c(1:(length(Tsup)-1))]),
-                                                                    time_preOsc=c(NA,time[c(1:(length(Tsup)-1))])
-                                                                  ),by=Tsup.set]
-  data.stm.simResult.oscillation[,":="(deltaTsupOsc=Tsup-Tsup_preOsc,deltaTimeOsc=time-time_preOsc)]#计算
-  stat.stm.simResult.oscillation<-data.stm.simResult.oscillation[,.(sideOscCount=length(deltaTsupOsc[!is.na(deltaTsupOsc)]),#记录了几个单侧震荡
-                                                                    # 注意，此处振幅和间隔，可能需要结合是否震荡来考虑
-                                                                    meanOscRange=mean(abs(deltaTsupOsc),na.rm=TRUE),#平均振幅
-                                                                    meanOscInv=2*mean(abs(deltaTimeOsc),na.rm=TRUE)#单侧振幅间隔
-                                                                    ),by=Tsup.set]
-  #simLab输出
-  stat.stm.simResult.simLab.oscillation<-stat.stm.simResult.oscillation%>%{
-                                            data.table(testId=TestId,
-                                                       meanOscRange45=.[Tsup.set==45]$meanOscRange,
-                                                       meanOscRange43=.[Tsup.set==43]$meanOscRange,
-                                                       meanOscInv45=.[Tsup.set==45]$meanOscInv,
-                                                       meanOscInv43=.[Tsup.set==43]$meanOscInv)}
+
+  if(nrow(data.stm.simResult.oscillation)==0){
+    #如果没有震荡被检测到，振幅为0，间隔为999
+    stat.stm.simResult.simLab.oscillation<-data.table(testId=TestId,
+                                                      meanOscRange45=0,
+                                                      meanOscRange43=0,
+                                                      meanOscInv45=999,
+                                                      meanOscInv43=999)
+    stat.stm.simResult.oscillation<-cbind(Tsup.set=c(50,45,43),data.table(sideOscCount=0,#记录了几个单侧震荡
+                                               # 注意，此处振幅和间隔，可能需要结合是否震荡来考虑
+                                               meanOscRange=0,#平均振幅
+                                               meanOscInv=999#单侧振幅间隔
+    ))
+  }else{
+    setorderv(data.stm.simResult.oscillation,"time",-1)
+    #选出单侧计算振幅的点数
+    data.stm.simResult.oscillation<-data.stm.simResult.oscillation[,.(time=time,
+                                                                      Tsup=Tsup,
+                                                                      Tsup_preOsc=c(NA,Tsup[c(1:(length(Tsup)-1))]),
+                                                                      time_preOsc=c(NA,time[c(1:(length(Tsup)-1))])
+    ),by=Tsup.set]
+    data.stm.simResult.oscillation[,":="(deltaTsupOsc=Tsup-Tsup_preOsc,deltaTimeOsc=time-time_preOsc)]#计算
+    stat.stm.simResult.oscillation<-data.stm.simResult.oscillation[,.(sideOscCount=length(deltaTsupOsc[!is.na(deltaTsupOsc)]),#记录了几个单侧震荡
+                                                                      # 注意，此处振幅和间隔，可能需要结合是否震荡来考虑
+                                                                      meanOscRange=mean(abs(deltaTsupOsc),na.rm=TRUE),#平均振幅
+                                                                      meanOscInv=2*mean(abs(deltaTimeOsc),na.rm=TRUE)#单侧振幅间隔
+    ),by=Tsup.set]
+    #simLab输出
+    #此处如果没有震荡可能会报warning
+    stat.stm.simResult.simLab.oscillation<-stat.stm.simResult.oscillation%>%{
+      data.table(testId=TestId,
+                 meanOscRange45=.[Tsup.set==45]$meanOscRange,
+                 meanOscRange43=.[Tsup.set==43]$meanOscRange,
+                 meanOscInv45=.[Tsup.set==45]$meanOscInv,
+                 meanOscInv43=.[Tsup.set==43]$meanOscInv)}
+  }
+  
   stat.stm.simResult.simLab.append<-merge(x=stat.stm.simResult.simLab.append,y=stat.stm.simResult.simLab.oscillation,by="testId")
   
   #### 结果输出及可视化 ####
@@ -155,6 +173,28 @@ for(i in 1:3){
      stat.stm.simResult.final,stat.stm.simResult.simLab.append,
      stat.stm.simResult.simLab.oscillation,stat.stm.simResult.simLab.ctrlPerf,tsupDirect)
 }
+
+#### 对输出至simlab结果进行后处理 ####
+# 所有震荡相关内容，统一置空标准
+# 震荡幅度OscRange 若无，则为0
+# 震荡间隔OscInv，若无，则为999
+
+stat.stm.simResult.simLab.backup<-stat.stm.simResult.simLab
+stat.stm.simResult.simLab<-stat.stm.simResult.simLab%>%{
+  #将未震荡情况统一化
+  .[is.na(meanOscRange45)]$meanOscRange45<-0
+  .[is.na(meanOscRange43)]$meanOscRange43<-0
+  .[is.na(meanOscInv45)|meanOscInv45<10]$meanOscInv45<-999
+  .[is.na(meanOscInv43)|meanOscInv43<10]$meanOscInv43<-999
+  # 将sse全设置为正值
+  .[,c("sseFinal50","sseFinal45","sseFinal43") ]<-lapply(.[,c("sseFinal50","sseFinal45","sseFinal43") ], abs)
+  .
+}
+
+#抽一部分看看
+nn<-stat.stm.simResult.simLab[testId%%10==0]
+  
+  
 write.table()
 
 
@@ -172,7 +212,9 @@ getStableRange<-function(Tsup.set){
     return(NA)
 }
 
-directionCount<-function(delta){#delta为需要判断对象的时间序列，data.table形式
+directionCount<-function(delta,threshold=0){
+  #delta为需要判断对象的时间序列，data.table形式
+  #
   state<-NULL#时间序列的方向
   directionLoc<-c()#发生变化的位置
   previousDir<-c()
@@ -191,7 +233,8 @@ directionCount<-function(delta){#delta为需要判断对象的时间序列，dat
         state<-append(state,sign(delta[i]))
         next
     }
-    if(sign(delta[i])!=state[length(state)]&&sign(delta[i])!=0){
+    # 判断条件 增量方向!=当前方向 增量!=0 增量>阈值
+    if(sign(delta[i])!=state[length(state)]&&sign(delta[i])!=0 && abs(delta[i])>=threshold){
       previousDir<-append(previousDir,state[length(state)])
       state<-append(state,sign(delta[i]))
       directionLoc<-append(directionLoc,i)
