@@ -195,7 +195,7 @@ stat.stm.simResult.simLab<-stat.stm.simResult.simLab%>%{
 nn<-stat.stm.simResult.simLab[testId%%10==0]
   
   
-write.table()
+write.table(stat.stm.simResult.simLab[,-"testId"],file="Output4Simlab.txt",row.names = FALSE)
 
 
 
